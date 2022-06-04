@@ -1,38 +1,36 @@
+// init wa web js
 const { Client, Location, List, Buttons, LocalAuth } = require('whatsapp-web.js');
+// init api
+const axios = require('axios');
 const express = require('express')
+const { body, validationResult } = require('express-validator');
 const app = express()
 const port = 3000
 
+// wa web js
 const client = new Client({
     authStrategy: new LocalAuth(),
     restartOnAuthFail: true,
     puppeteer: { 
         headless: false }
 });
-
 client.initialize();
-
 client.on('qr', (qr) => {
     // NOTE: This event will not be fired if a session is specified.
     console.log('QR RECEIVED', qr);
 });
-
 client.on('authenticated', () => {
     console.log('AUTHENTICATED');
 });
-
 client.on('auth_failure', msg => {
     console.error('AUTHENTICATION FAILURE', msg);
 });
-
 client.on('ready', () => {
     console.log('READY');
 });
-
 client.on('disconnected', (reason) => {
     console.log('Client was logged out', reason);
 });
-
 client.on('message', async msg => {
     console.log('MESSAGE RECEIVED', msg);
     if (msg.isStatus == false) {
@@ -114,3 +112,33 @@ client.on('message', async msg => {
 
     }
 });
+
+// api
+app.use(express.json());
+app.use(express.urlencoded({
+    extended: true
+}));
+app.listen(port, () => {
+    console.log("Example app listening on http://127.0.0.1:" + port)
+})
+app.get('/', (req, res) => {
+    axios
+        .get('https://dog.ceo/api/breeds/image/random')
+        .then(res => {
+            console.log(res.data);
+        })
+        .catch(error => {
+            console.error("Error : " + error);
+        });
+    return res.send(res.data);
+})
+app.post('/send-message', [
+    body('number').notEmpty(),
+    body('message').notEmpty(),
+], async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.mapped() });
+    }
+    res.send(req.body);
+})
