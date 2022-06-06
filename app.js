@@ -54,7 +54,6 @@ client.on('message', async msg => {
                 var tanggal = date + index + '/' + month + '/' + year;
                 tanggals.push({ title: 'TANGGAL ' + tanggal });
             }
-
             let sections = [{ title: 'Pilih Tanggal Antrian', rows: tanggals }];
             let list = new List("Untuk pendaftaran antrian pasien silahkan pilih tanggal pendaftaran berikut.", 'Pilih Tanggal Pendaftaran', sections, '', '');
             await client.sendMessage(msg.from, list);
@@ -74,7 +73,7 @@ client.on('message', async msg => {
                 .then(response => {
                     console.log(`statusCode: ${response.status}`);
                     response.data.forEach(function (jadwal) {
-                        jadwals.push({ title: "JADWAL" + jadwal.id + " " + tanggal + " ", description: "Poliklinik " + jadwal.namasubspesialis + " " + jadwal.namadokter + " " + jadwal.jadwal + " " });
+                        jadwals.push({ title: "JADWAL " + jadwal.id + " " + tanggal + " ", description: "Poliklinik " + jadwal.namasubspesialis + " " + jadwal.namadokter + " " + jadwal.jadwal + " " });
                     });
                     let sections = [{ title: 'Pilih Jadwal Dokter', rows: jadwals }];
                     let list = new List("Silahkan pilih jadwal dokter pada tanggal " + tanggal, 'Pilih Jadwal Dokter', sections, '', '');
