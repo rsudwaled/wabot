@@ -1,18 +1,23 @@
 // init wa web js
-const { Client, Location, List, Buttons, LocalAuth } = require('whatsapp-web.js');
+const { Client, Location, MessageMedia, List, Buttons, LocalAuth } = require('whatsapp-web.js');
 // init api
 const axios = require('axios');
 const express = require('express')
 const { body, validationResult } = require('express-validator');
 const app = express()
 const port = 3000
+// init helpers
+const { phoneNumberFormatter } = require('./helpers/formatter');
+const { response } = require('express');
+
 
 // wa web js
 const client = new Client({
     authStrategy: new LocalAuth(),
     restartOnAuthFail: true,
-    puppeteer: { 
-        headless: false }
+    puppeteer: {
+        headless: false
+    }
 });
 client.initialize();
 client.on('qr', (qr) => {
@@ -58,12 +63,26 @@ client.on('message', async msg => {
         else if (msg.body.startsWith('TANGGAL')) {
             var tanggal = msg.body.split(' ')[1];
             var jadwals = [];
-            for (let index = 0; index < 4; index++) {
-                jadwals.push({ title: "JADWAL 0000" + index + " " + tanggal + " ", description: "Poli Anak Dr. Marwan Dhiaur Rahman 08.00-12.00" });
-            }
-            let sections = [{ title: 'Pilih Jadwal Dokter', rows: jadwals }];
-            let list = new List("Silahkan pilih jadwal dokter pada tanggal " + tanggal, 'Pilih Jadwal Dokter', sections, '', '');
-            await client.sendMessage(msg.from, list);
+            var tanggals = tanggal.split('/');
+            var hari = tanggals[0];
+            var bulan = tanggals[1];
+            var tahun = tanggals[2];
+
+            var url = "http://127.0.0.1:8000/api/antrian/ref/jadwal?tanggalperiksa=" + tahun + "-" + bulan + "-" + hari;
+
+            axios.get(url)
+                .then(response => {
+                    console.log(`statusCode: ${response.status}`);
+                    response.data.forEach(function (jadwal) {
+                        jadwals.push({ title: "JADWAL" + jadwal.id + " " + tanggal + " ", description: "Poliklinik " + jadwal.namasubspesialis + " " + jadwal.namadokter + " " + jadwal.jadwal + " " });
+                    });
+                    let sections = [{ title: 'Pilih Jadwal Dokter', rows: jadwals }];
+                    let list = new List("Silahkan pilih jadwal dokter pada tanggal " + tanggal, 'Pilih Jadwal Dokter', sections, '', '');
+                    client.sendMessage(msg.from, list);
+                })
+                .catch(error => {
+                    console.error("Error : " + error);
+                });
         }
         //3 jadwal dokter bales format pendaftaran
         else if (msg.body.startsWith('JADWAL')) {
@@ -101,13 +120,14 @@ client.on('message', async msg => {
         //send button
         else if (msg.body == 'btn') {
             let button = new Buttons('Button body', [{ body: 'Button' }], 'title', 'footer');
-            client.sendMessage(msg.from, button)
+            await client.sendMessage(msg.from, button)
         }
         // default
         else {
             let sections = [{ title: 'MENU PERINTAH', rows: [{ title: 'DAFTAR PASIEN' }, { title: 'INFO PENDAFTARAN' }, { title: 'INFO JADWAL DOKTER' }, { title: 'INFO ANTRIAN' },] }];
             let list = new List("Maaf, pesan yang anda kirimkan tidak dapat kami proses. Layanan ini diatur melalui sistem.\nUntuk pertanyaan & pengaduan silahkan hubungi *Humas RSUD Waled 08983311118* \n\nSilahkan pilih dan kirim perintah dengan klik tombol dibawah ini.", 'Pilih Menu Perintah', sections, '', '');
             await client.sendMessage(msg.from, list);
+            // await client.sendMessage("6289529909036@c.us", "pesan");
         }
 
     }
@@ -120,7 +140,7 @@ app.use(express.urlencoded({
 }));
 app.listen(port, () => {
     console.log("Example app listening on http://127.0.0.1:" + port)
-})
+});
 app.get('/', (req, res) => {
     axios
         .get('https://dog.ceo/api/breeds/image/random')
@@ -131,14 +151,94 @@ app.get('/', (req, res) => {
             console.error("Error : " + error);
         });
     return res.send(res.data);
-})
+});
+// send message
 app.post('/send-message', [
     body('number').notEmpty(),
     body('message').notEmpty(),
 ], async (req, res) => {
+    // checking error
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.mapped() });
     }
-    res.send(req.body);
-})
+    // init client
+    const number = phoneNumberFormatter(req.body.number);
+    const message = req.body.message;
+    // send message
+    client.sendMessage(number, message)
+        .then(
+            (response) => {
+                return res.send(response);
+            }
+        ).catch(
+            (error) => {
+                return res.send("Error : " + error);
+            }
+        );
+});
+// send list button
+app.post('/send-list', [
+    body('number').notEmpty(),
+    body('message').notEmpty(),
+], async (req, res) => {
+    // checking error
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.mapped() });
+    }
+    // init client
+    const number = phoneNumberFormatter(req.body.number);
+    const message = req.body.message;
+    // send list
+    let sections = [{ title: 'MENU PERINTAH', rows: [{ title: 'DAFTAR PASIEN' }, { title: 'INFO PENDAFTARAN' }, { title: 'INFO JADWAL DOKTER' }, { title: 'INFO ANTRIAN' },] }];
+    let list = new List("Maaf, pesan yang anda kirimkan tidak dapat kami proses. Layanan ini diatur melalui sistem.\nUntuk pertanyaan & pengaduan silahkan hubungi *Humas RSUD Waled 08983311118* \n\nSilahkan pilih dan kirim perintah dengan klik tombol dibawah ini.", 'Pilih Menu Perintah', sections, '', '');
+    await client.sendMessage(number, list)
+        .then(
+            (response) => {
+                console.log(response);
+                return res.send(response);
+            }
+        ).catch(
+            (error) => {
+                console.log("Error : " + error);
+                return res.send("Error : " + error);
+            }
+        );
+});
+// send media
+app.post('/send-media', [
+    body('number').notEmpty(),
+    body('caption').notEmpty(),
+    body('file').notEmpty(),
+], async (req, res) => {
+    // checking error
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.mapped() });
+    }
+    // init client
+    const caption = req.body.caption;
+    const fileUrl = req.body.file;
+    const number = phoneNumberFormatter(req.body.number);
+    // init media
+    let mimetype;
+    const attachment = await axios.get(fileUrl, {
+        responseType: 'arraybuffer'
+    }).then(response => {
+        mimetype = response.headers['content-type'];
+        return response.data.toString('base64');
+    });
+    const media = new MessageMedia(mimetype, attachment, 'Media');
+    // send message media
+    client.sendMessage(number, media, { caption: caption })
+        .then(
+            (response) => {
+                return res.send(response);
+            }
+        ).catch(
+            (error) => {
+                return res.send("Error : " + error);
+            }
+        );
+});
